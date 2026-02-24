@@ -1,20 +1,25 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-
-public static class Orchestrator
+[Function("Orchestrator")]
+public async Task<string> RunOrchestrator(
+    [OrchestrationTrigger] TaskOrchestrationContext context)
 {
-    [FunctionName("Orchestrator")]
-    public static async Task<List<string>> RunOrchestrator(
-        [OrchestrationTrigger] IDurableOrchestrationContext context)
-    {
-        var outputs = new List<string>();
+    var order = context.GetInput<OrderModel>();
 
-        outputs.Add(await context.CallActivityAsync<string>("Activity", "Hello"));
-        outputs.Add(await context.CallActivityAsync<string>("Activity", "Durable"));
-        outputs.Add(await context.CallActivityAsync<string>("Activity", "Functions"));
+    string validation = await context.CallActivityAsync<string>("ValidateOrder", order);
 
-        return outputs;
-    }
+    if (validation != "Valid")
+        return "Order Rejected";
+
+    string payment = await context.CallActivityAsync<string>("ProcessPayment", order);
+
+    if (payment != "Success")
+        return "Payment Failed";
+
+    string inventory = await context.CallActivityAsync<string>("ReserveInventory", order);
+
+    if (inventory != "Reserved")
+        return "Inventory Not Available";
+
+    await context.CallActivityAsync<string>("SendEmail", order);
+
+    return "Order Completed Successfully";
 }
